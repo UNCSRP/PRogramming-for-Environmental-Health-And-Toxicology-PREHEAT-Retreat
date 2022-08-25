@@ -7,5 +7,4 @@ This repository contains training materials for the PRogramming for Environmenta
 | Interface | Badge |
 | --------- | ----- |
 | Jupyter Notebook | [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/alexispayton/bios512-assignments/main) |
-| Jupyter Lab | [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/alexispayton/bios512-assignments/main?urlpath=lab) |
-| RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/alexispayton/bios512-assignments/main?urlpath=rstudio) |
+| RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/UNC-CEMALB/PRogramming-for-Environmental-Health-And-Toxicology-PREHEAT-Retreat/main?urlpath=rstudio) |
