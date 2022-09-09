@@ -8,5 +8,5 @@ Click on either the Jupyter Notebook or RStudio icon to render (pull up) this re
 
 | Interface | Badge |
 | --------- | ----- |
-| Jupyter Notebook | [![Binder](https://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-u7caybew/tree) |
+| Jupyter Notebook | [![Binder](https://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-snivu24n/tree) |
 | RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-snivu24n/rstudio/) |
