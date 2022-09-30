@@ -1,6 +1,6 @@
 channels:
   - conda-forge
+  - default
 dependencies:
-  - r-base
   - r-tidyverse
   - gxx_linux-64
