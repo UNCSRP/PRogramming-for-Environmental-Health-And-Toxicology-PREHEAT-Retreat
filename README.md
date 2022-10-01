@@ -10,3 +10,5 @@ Click on either the Jupyter Notebook or RStudio icon to render (pull up) this re
 | --------- | ----- |
 | Jupyter Notebook | [![Binder](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/tree) |
 | RStudio | [![Binder](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/rstudio/) |
+
+Check out this [link](https://github.com/binder-examples/r) to get more info on creating a cloud environment using Binder. 
