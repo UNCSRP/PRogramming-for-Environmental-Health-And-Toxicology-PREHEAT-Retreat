@@ -8,7 +8,8 @@ Click on either the Jupyter Notebook or RStudio icon to render (pull up) this re
 
 | Interface | Badge |
 | --------- | ----- |
-| Jupyter Notebook | [![Binder](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/tree) |
-| RStudio | [![Binder](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/rstudio/) |
+| Jupyter Notebook | [![Binder](http://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/tree) |
+| RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/rstudio/) |
+| RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/alexispayton/bios512-assignments/main?urlpath=rstudio) |
 
 Check out this [link](https://github.com/binder-examples/r) to get more info on creating a cloud environment using Binder. 
