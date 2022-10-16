@@ -5,10 +5,3 @@ This repository contains training materials for the PRogramming for Environmenta
 [Link to NBViewer](https://nbviewer.org/github/UNC-CEMALB/PRogramming-for-Environmental-Health-And-Toxicology-PREHEAT-Retreat/tree/main/)
 
 Click on either the Jupyter Notebook or RStudio icon to render (pull up) this repository in either cloud environment. In both of these environments, you'll be able to code in R while having access to all the files in this repository.
-
-| Interface | Badge |
-| --------- | ----- |
-| Jupyter Notebook | [![Binder](http://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/tree) |
-| RStudio | [![Binder](http://mybinder.org/badge_logo.svg)](https://hub.gke2.mybinder.org/user/unc-cemalb-prog-preheat-retreat-eq3pt6wi/rstudio/) |
-
-Check out this [link](https://github.com/binder-examples/r) to get more info on creating a cloud environment using Binder. 
