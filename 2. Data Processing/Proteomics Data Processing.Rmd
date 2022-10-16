@@ -1,0 +1,263 @@
+Installing and loading packages.
+
+```{r}
+
+# installing packages
+if (!require("BiocManager", quietly = TRUE))
+     install.packages("BiocManager")
+
+BiocManager::install(c("pcaMethods", "impute"))
+
+install.packages("imputeLCMD")
+install.packages(c("tidyverse", "factoextra"))
+
+
+# loading packages
+library(tidyverse)
+library(imputeLCMD)
+library(factoextra)
+
+```
+
+
+```{r}
+# specifying the location of files to be exported on my computer
+Output <- ("/Users/alexis/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/CEMALB_DataAnalysisPM/Projects/P1007. Proteomic Smoke Screen Workshop/P1007.3. Analyses/P1007.3.1. Data Processing/Output")
+
+# it's always a good idea to update the date every time the file is modified
+cur_date <- "100522"
+
+# reading in files
+demographics_df <- read_csv("Input/Unprocessed_Demographics_Data.csv")
+proteomics_df <- read_csv("Input/Unprocessed_Proteomics_Data.csv")
+
+# let's view our data
+head(demographics_df)
+head(proteomics_df)
+```
+
+# 1. Removing Subject Outliers
+
+Our `demographics_df`contains 3 subjects (NR_4, NR_9, and R_27) that there were deemed as outliers and need to be removed. (This was due to blood contamination and low expression.) The `filter`function will be used to remove these three subjects.
+
+
+```{r}
+# creating a vector with the subject ids of the outliers
+outlier_subjects <- c("NR_4", "NR_9", "R_27")
+
+# creating a variable that does the opposite of '%in%'
+`%notin%` <- Negate(`%in%`)
+
+# removing outliers using the filter function
+demographics_df_no_outliers <- demographics_df %>%
+    # filtering for subjects not in the outlier_subjects vector
+    filter(Subject_ID %notin% outlier_subjects)
+
+# let's check to see if they were removed
+dim(demographics_df)
+dim(demographics_df_no_outliers)
+```
+
+The `dim` function provides the length (first number) and width (second number) of our data. Since, each subject has one row of information we can see that we now have 3 fewer subjects. 
+
+# 2. Reshaping & Merging Dataframes
+
+Our `demographics_df`is in a long format, but our `proteomics_df`is in a wide format. Notice that the `proteomics_df` has column names that contains both the subject ID and time point of data collection. Both of those variables are important to us and would be easier to work with if the subject ID and time point and their own separate columns. Let's do that using the function `pivot_longer`!
+
+
+```{r}
+# telling the pivot_longer function to only pivot the concentration data (columns 6 through 61)
+# the two columns for the names and values can be renamed 
+longer_proteomics_df <- pivot_longer(proteomics_df, cols = 6:59, names_to = "Subject_ID.Sample_ID", 
+                                    values_to = "Intensity")
+
+# viewing data
+head(longer_proteomics_df)
+```
+
+The subject ids and sample ids are still merged together in one column, so we'll create two separate columns for each variable using the `separate` function.
+
+```{r}
+longer_proteomics_separated_df <- longer_proteomics_df %>%
+    # in the separate function a period needs to be specified by "\\." not "."
+    # the second parameter is used to specify the new column names
+    separate(Subject_ID.Sample_ID, c("Subject_ID", "Sample_ID"), sep = "\\.")
+
+# viewing data
+head(longer_proteomics_separated_df)
+```
+
+Now we can use the `Subject_ID` column to merge the `demographics_df` and `final_proteomics_df` using the `inner_join`function.
+
+We're also going to remove the `Original_Subject_Number` and the `Proteomic_Core_Subject_Number` since they're no longer needed.
+
+```{r}
+# square brackets can be used in R to subset dataframes
+# the left side of the comma selects rows and the right side selects columns
+# below we're telling the computer to keep all the rows, but only keep columns 3 through 20
+proteomics_demographics_df <- inner_join(demographics_df, longer_proteomics_separated_df)[,3:20]
+
+# viewing data
+head(proteomics_demographics_df)
+```
+
+# 3. Peptide Normalization
+
+Biologically speaking, proteomics normalization is to "correct for variability that is not coming from the biological system itself, but from th experimental process" [ref](https://help2.biognosys.com/portal/en/kb/articles/how-is-my-data-normalized-in-spectronaut#:~:text=Default%20normalization%20in%20Spectronaut,-Spectronaut%20default%20settings&text=This%20default%20normalization%20is%20based,peptides%20up%20and%20down%20regulated). Statistically speaking, normalization is used to put all variables on the same scale between 0 and 1. We normalize to total amount of peptide per sample by: 
+
+1. Summing the abundance values for each sample
+2. Calculating the median value across all of the summed abundance values
+3. Calculating the ratio
+
+In our dataset, we'll create a new column of normalized values. Let's call it `Norm_Intensity`, which is short for normalized concentration. We can create a new column using the `mutate`function.
+
+When creating variables names, keep in mind that they should be descriptive and relevant to the data it contains.
+
+
+```{r}
+normalized_df <- proteomics_demographics_df %>%
+    # grouping by sample
+    group_by(Sample_ID) %>%
+    # taking the sum of the intensities for each sample
+    mutate(Summed_Value <- sum(Intensity)) %>%
+    # calculating median across all samples 
+    ungroup() %>%
+    mutate(Median_of_Sum <- median(Summed_Value), Norm_Factor <- Summed_Value/ Median_of_Sum, 
+           Norm_Intensity <- Intensity/Norm_Factor) %>%
+    # using the select function to remove columns we no longer need
+    select(-c("Summed_Value", "Median_of_Sum", "Norm_Factor"))
+
+# viewing data
+head(normalized_df)
+```
+
+# 4. Imputation of Missing Data
+
+Quantile Regression Imputation of Left Censored Data (QRILC) replaces data with left-censored data from a Gaussian distribution. We're assuming most of the missing data is due to low expression levels and low detection, therefore this method will be used. 
+
+First, we need to create another column specifically for the time point, since QRILC will be performed on each time point separately.
+
+```{r}
+QRILC_imputation <- function(dataset){
+    # """
+    # Creating a quantile normalization function to normalize each sample.
+    # :param (input): preimputed df
+    # :output: 1 quantile normalized df
+    # """
+    wider_dataset <- dataset %>%
+        select(c("Subject_ID", "Sample_ID", "Protein_Accession", "Norm_Intensity")) %>%
+        pivot_wider(names_from = Protein_Accession, values_from = Norm_Intensity) 
+    
+    # normalizing data since that's what the QRILC function requires
+    QRILC_prep <- wider_dataset[,3:dim(wider_dataset)[2]] %>%
+         mutate_all(., function(x) log2(x)) %>%
+         as.matrix()
+    
+    imputed_QRILC_object <- impute.QRILC(QRILC_prep, tune.sigma = 0.1)
+    QRILC_log2_df <- data.frame(imputed_QRILC_object[1]) 
+    
+   # converting back the original scale
+    QRILC_df <- QRILC_log2_df %>%
+        mutate_all(., function(x) 2^x - 1)
+    
+    # adding back in id cols
+    QRILC_df <- cbind(Subject_ID = wider_dataset$Subject_ID, Sample_ID <- wider_dataset$Sample_ID, QRILC_df)
+            
+    # pivoting the df back into a long format
+    imputed_dataset <- QRILC_df %>%
+         pivot_longer(cols = 3:all_of(dim(QRILC_df)[2]), names_to = "Protein_Accession", values_to = "Intensity")
+
+   return(imputed_dataset)
+}
+
+# calling fn
+imputed_df <- QRILC_imputation(normalized_df)
+                   
+# viewing data            
+head(imputed_df)
+```
+
+# 4. Additional Test for Outliers using PCA
+
+For this task, we're interested in identifying subject outliers based on protein concentrations, but within each time point. 
+
+To test for outliers, often times **Principal Component Analysis (PCA)** is employed. PCA works by seeking to preserve the maximum amount of variance or information, while compressing it into the fewest number of dimensions or eigenvectors as possible. By reducing the number of dimensions of our data, this will make it easier to visualize, interpret, and therefore identify outliers. We'll use the `prcomp` function to run PCA. 
+
+```{r}
+# prepping df for PCA
+pca_prep_df <- imputed_df %>%
+    # selecting columns of interest
+    select(c("Sample_ID", "Protein_Accession", "Intensity")) %>%
+    pivot_wider(names_from = Protein_Accession, values_from = Intensity) %>%
+    column_to_rownames(var = "Sample_ID")
+
+head(pca_prep_df)
+
+# running PCA
+pca <- prcomp(pca_prep_df)
+
+# viewing scree plots to see how much of the variance was captured in first 2 eigenvectors
+options(repr.plot.width = 10, repr.plot.height = 5) # changing size
+fviz_eig(pca, addlabels = TRUE)
+
+# visualizing all data to detect outliers
+fviz_pca_ind(pca, 
+             repel = TRUE) +
+theme(axis.line = element_line(colour = "black"), #making x and y axes black
+      legend.text = element_text(size = 8),
+      axis.title = element_text(face = "bold", size = rel(1.1))) #changes axis titles
+```
+
+
+It looks like Post_3 should be removed, but let's use a quantitative cutoff to ensure others aren't missed. The standard way to detect outliers in genetics is the criterion of being “more than 6 standard deviations away from the mean” [ref](https://privefl.github.io/blog/detecting-outlier-samples-in-pca/). 
+
+
+```{r}
+outlier_detection <- function(pca_df){
+    # """
+    # Creating a scoring function for to detect PCA sample outliers. 
+    # :param (input): PCA df (df)
+    # :output: outlier names
+    # """
+    
+    # getting scores
+    scores <- pca_df$x
+    # identifying samples that are > 6 standard deviations away from the mean
+    outlier_indices <- apply(scores, 2, function(x) which( abs(x - mean(x)) > (6 * sd(x)) )) %>%
+        Reduce(union, .)
+    # getting sample names
+    outliers = rownames(scores)[outlier_indices]
+    
+    return(outliers)
+}
+
+# calling fn
+outliers <- outlier_detection(pca)
+outliers
+```
+
+There were no outliers based on the quantitative cut off, so no samples or subjects will be removed. Now we'll create two files to export - one for demographics data and one for proteomics data. 
+
+```{r}
+# demographics data
+final_demographics_df <- unique(inner_join(demographics_df[,3:13], imputed_df[,1:2])) %>%
+    # let's add a column for time point
+    mutate(Time_Point = Sample_ID) %>%
+    separate(Time_Point, c("Time_Point", NA), sep = "_")
+
+head(final_demographics_df)
+
+# proteomics data
+final_proteomics_df <- imputed_df %>%
+    select(-Subject_ID) %>%
+    pivot_wider(names_from = "Sample_ID", values_from = "Intensity")
+
+head(final_proteomics_df)
+```
+
+
+```{r}
+# exporting results
+write.csv(final_demographics_df, paste0(Output,"/", "Demographics_Data.csv"), row.names = FALSE)
+write.csv(final_proteomics_df, paste0(Output,"/", "Proteomics_Data.csv"), row.names = FALSE)
+```
