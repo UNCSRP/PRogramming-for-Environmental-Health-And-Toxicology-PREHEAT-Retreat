@@ -1,4 +1,4 @@
-This is the data for the PREHEAT Retreat analyses.
+Thess are the data for the PREHEAT Retreat analyses.
 
 There are two files:
   1. Proteomics dataset - Processed_Proteomics_Data
