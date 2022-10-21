@@ -2,20 +2,48 @@
 
 This repository contains training materials for the PRogramming for Environmental Health and Toxicology (PREHEAT) retreat on October 20-21, 2022. In the instance that the files are unable to rendered the NBViewer link can be clicked below. 
 
-[Link to NBViewer](https://nbviewer.org/github/UNC-CEMALB/PRogramming-for-Environmental-Health-And-Toxicology-PREHEAT-Retreat/tree/main/)
-
-Click on either the Jupyter Notebook or RStudio icon to render (pull up) this repository in either cloud environment. In both of these environments, you'll be able to code in R while having access to all the files in this repository.
-
-
 
 Please click on the below link to complete the pre-workshop survey:
 https://unc.az1.qualtrics.com/jfe/form/SV_0eN4EnD8rtlyyGy
  
-
-
-
-
 Post-workshop survey link:
 https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
+
+
+
+
+Group Assignments:
+
+*Group 1: Neutrophil response-associated proteins*
+*Statistics questions:*
+* Provided script: At baseline (pre-exposure): What proteins are differentially expressed in PMN responders vs. non-responders?
+** Script that you need to generate: Post-exposure: What proteins are differentially expressed in PMN responders vs. non-responders?
+** Compare these two findings: are they the same?
+
+*Machine learning questions:*
+* Script that you need to generate: what proteins predict responder vs. non-responder status?
+
+
+Group 2: Sex-associated proteins
+						◊ At baseline (pre-exposure): What proteins differ by sex?
+						◊ Post-exposure: What proteins differ by sex?
+							} Compare these two findings: are they the same?
+							
+					® Group 3: Race-associated proteins
+						◊ At baseline (pre-exposure): What proteins differ by race?
+						◊ Post-exposure: What proteins differ by race?
+							} Compare these two findings: are they the same?
+							
+					® Group 4: BMI-associated differences
+						◊ At baseline (pre-exposure): What proteins differ by BMI?
+						◊ Post-exposure: What proteins differ by BMI?
+							} Compare these two findings: are they the same?
+						
+					® Group 5: Asthma-associated proteins
+						◊ At baseline (pre-exposure): What proteins differ by asthma status?
+						◊ Post-exposure: What proteins differ by asthma status?
+Compare these two findings: are they the same?
+
+
 
 
