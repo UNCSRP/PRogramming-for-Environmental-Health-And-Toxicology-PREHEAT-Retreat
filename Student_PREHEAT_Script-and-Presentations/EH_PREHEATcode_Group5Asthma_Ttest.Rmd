@@ -1,0 +1,175 @@
+---
+title: "PREHEAT Data Analysis Report"
+author: "Elise Hickman, Hannah Matthews, Morgan Nalesnik"
+date: "2022-10-21"
+output: 
+ html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    code_folding: show
+---
+
+## PREHEAT Retreat Script Description
+
+Authored by Elise Hickman, Hannah Matthews, and Morgan Nalesnik. Group 5 - Asthma Status.
+Aim of script: determine whether there are significant protein expression differences between asthmatics and nonasthmatics.
+
+## Two Group Comparisons
+
+#### Setup and Data Import
+
+```{r message = FALSE}
+# Load packages
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+library(superheat)
+```
+
+Load data.
+```{r}
+# Demographic Data
+demo.data <- read.csv("../Data/Demographic_Data.csv")
+
+# Proteomics Data
+proteomics.data <- read.csv("../Data/Processed_Proteomics_Data.csv")
+
+# Make sure everyone has two samples
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+```
+#### Data Exploration
+```{r}
+describe(demo.data)
+```
+
+
+Plotting boxplots of all genes per sample, same as what we did in pre-processing script. Data needs to be reformatted to tidy format.
+
+```{r}
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name"))
+proto.long$PrevPost = gsub("_.*", "", proto.long$name)
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=PrevPost)) + geom_boxplot(outlier.shape = NA)
+```
+We can also use a heatmap to visualize all the data at once using superheat package.
+
+```{r}
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90)
+```
+
+#### Dataset manipulation
+
+General data manipulation/organization.
+```{r}
+# Combine data
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%   # filter lets us filter by some condition, here Gene_Name that is NOT NA (aka not missing)
+
+mutate(Gene_Name = gsub("-", "_", Gene_Name))  # mutate allows us to create a new variable or modify existing one, here I'm just changing - to _ in gene names
+
+# First transpose the data so subjects are on rows
+proto.tr.data = data.frame(t(proteomics.data)) # "t" transposes dataset (columns to rows, rows to columns)
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+
+# Create ID column
+proto.tr.data$SampleID = rownames(proto.tr.data)
+
+
+# Merge two datasets so everything is together
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>%     # filter to only "Pre" exposure
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%        # select alows you to just use the specified columns
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Pre") # pivot longer turns the data into long form
+                                                                                       # cols says which columns to pivot longer -- i am telling it to use everything EXCEPT Subject_Number
+                                                                                       # names_to  says where to store info from column names for data specified by "cols"
+                                                                                       # values_to  says where to store the actual data
+
+# Do the same thing for post exposure data
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Post")
+
+
+# Combine pre and post by subject number
+
+long.data = merge(long.data.pre, long.data.post, by = c("Gene", "Subject_Number"))
+```
+
+#### Asthma-Associated Proteins
+
+More data cleaning.
+
+```{r}
+# For all these questions we are looking at PRE exposure, so let's just create a long dataset with only pre exposure across the various columns
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Pre") %>%
+  arrange(Gene)
+long.data.pre$Value_Pre = as.numeric(long.data$Value_Pre)
+
+
+long.data.pre.loop = combined.data[which(combined.data$PrevPost=="Pre"),]
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Post") %>%
+  arrange(Gene)
+long.data.post$Value_Post = as.numeric(long.data$Value_Post)
+
+long.data.post.loop = combined.data[which(combined.data$PrevPost=="Post"),]
+
+long.data = merge(long.data.pre, long.data.post, by = c("Gene", "Subject_Number"))
+
+```
+
+
+# Pre-Exposure: What proteins differ by asthma status?
+
+```{r}
+stat.test.asthma.pre = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(pval = t.test(Value_Pre ~ Asthma_Status)$p.value,
+            as_tibble(as.list(t.test(Value_Pre ~ Asthma_Status)$estimate)),
+            statistic = t.test(Value_Pre ~ Asthma_Status)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+
+stat.test.asthma.pre.order = stat.test.asthma.pre[order(stat.test.asthma.pre$pval.BH),]
+
+combined.data.pre <- filter(combined.data, PrevPost == 'Pre')
+combined.data.pre$HLA_C <- as.numeric(combined.data.pre$HLA_C)
+
+theme_set(theme_bw())
+ggplot(combined.data.pre, aes(x = Asthma_Status, y = HLA_C)) +
+  geom_boxplot() +
+  geom_jitter(position=position_jitter(width=0.1, height=0.1)) +
+  labs(title = "HLA-C Expression", x = "Asthma Status", y = "Relative Expression")
+```
+
+# Pre-Exposure: What proteins differ by asthma status?
+```{r}
+stat.test.asthma.post = long.data.post %>%
+  group_by(Gene) %>%
+  summarise(pval = t.test(Value_Post ~ Asthma_Status)$p.value,
+            as_tibble(as.list(t.test(Value_Post ~ Asthma_Status)$estimate)),
+            statistic = t.test(Value_Post ~ Asthma_Status)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+
+stat.test.asthma.post.order = stat.test.asthma.post[order(stat.test.asthma.post$pval.BH),]
+
+combined.data.post <- filter(combined.data, PrevPost == 'Post')
+combined.data.post$HEXA <- as.numeric(combined.data.post$HEXA)
+
+theme_set(theme_bw())
+ggplot(combined.data.post, aes(x = Asthma_Status, y = HEXA)) +
+  geom_boxplot() +
+  geom_jitter(position=position_jitter(width=0.1, height=0.1)) +
+  labs(title = "HEXA Expression", x = "Asthma Status", y = "Relative Expression")
+```
+
