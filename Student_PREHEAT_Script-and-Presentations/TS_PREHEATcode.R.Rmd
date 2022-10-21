@@ -1,0 +1,155 @@
+---
+title: "Group_4_rmd"
+output: html_document
+date: "2022-10-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r}
+##  Load Packages
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+library(superheat)
+```
+
+
+```{r}
+##  Load Data
+
+# Demographic Data
+demo.data = read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+
+# Proteomics Data
+proteomics.data = read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+
+# Make sure everyone has two samples
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+```
+
+
+```{r}
+##  Data Exploration
+
+### Let's just take a look at our data before doing anything analyses, maybe should do some of this before manipulation
+
+# I like to use description functions like describe from Hmisc package, others exist
+
+describe(demo.data)
+
+### Can plot big data, that you can't just visually inspect manually
+
+# I want to plot boxplots of all genes per sample, same as what we did in pre-processing script
+# Need to reformat data to tidy format ;) 
+
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name"))
+proto.long$PrevPost = gsub("_.*", "", proto.long$name)
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=PrevPost)) + geom_boxplot(outlier.shape = NA)
+
+### We can use a heatmap to visualize all the data at once!
+
+# There are MANY heatmap packages, I like superheat because it's easy to customize 
+# Link to vignette: https://rlbarter.github.io/superheat/basic-usage.html
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90)
+```
+
+
+```{r}
+##  Dataset Manipulation
+
+# Combine data
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%   
+  # filter let's us filter by some condition, here Gene_Name that is NOT NA (aka not missing)
+  mutate(Gene_Name = gsub("-", "_", Gene_Name))  
+  # mutate allows us to create a new variable or modify existing one, here I'm just changing - to _ in gene names
+
+# First transpose the data so subjects are on rows
+proto.tr.data = data.frame(t(proteomics.data)) 
+# "t" transposes dataset (columns to rows, rows to columns)
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+
+# Create ID column
+proto.tr.data$SampleID = rownames(proto.tr.data)
+
+# Merge two datasets so everything is together
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Pre") %>%
+  arrange(Gene)
+long.data.pre$Value_Pre = as.numeric(long.data.pre$Value_Pre)
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Post") %>%
+  arrange(Gene)
+long.data.post$Value_Post = as.numeric(long.data.post$Value_Post)
+
+long.data.pre.loop = combined.data[which(combined.data$PrevPost=="Pre"),]
+```
+
+
+```{r}
+##  4. BMI-associated differences
+# Group 4: BMI-associated differences
+# At baseline (pre-exposure): What proteins differ by BMI?
+
+stat.test.BMI.pre = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(as_tibble(as.list(summary(lm(Value_Pre ~ BMI))$coefficients["BMI",]))) %>%
+  rename(pval=`Pr(>|t|)`) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+
+stat.test.BMI.post = long.data.post %>%
+  group_by(Gene) %>%
+  summarise(as_tibble(as.list(summary(lm(Value_Post ~ BMI))$coefficients["BMI",]))) %>%
+  rename(pval=`Pr(>|t|)`) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+```
+
+
+```{r}
+# Identify significantly associated genes
+
+# Pre exposure genes, not correcting with BH
+BMI.pre.sig <- filter(stat.test.BMI.pre, pval <0.05)
+# Remove unneeded columns
+BMI.pre.sig <- subset(BMI.pre.sig, select = -c(2,3,4))
+print(BMI.pre.sig)
+
+# Post exposure genes, not correcting with BH
+BMI.post.sig <- filter(stat.test.BMI.post, pval<0.05)
+# Remove unneeded columns
+BMI.post.sig <- subset(BMI.post.sig, select = -c(2,3,4))
+print(BMI.post.sig)
+```
+
+
+```{r}
+# Identify overlap between pre and post
+overlap <-
+  BMI.pre.sig %>%
+  inner_join(BMI.post.sig, by = "Gene")
+
+names(overlap) <- c("Gene", "pre.p.val", "pre.p.val.BH", 'post.pval', 'post.pval.HB')
+
+print(overlap)
+```
+
