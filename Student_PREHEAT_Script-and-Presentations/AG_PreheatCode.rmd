@@ -1,0 +1,298 @@
+##################################################################################################
+##################################################################################################
+##   PREHEAT Retreat - BMI Group Analysis
+##
+##   Author: Amaree Gardner
+##   Date: October 21st, 2022
+##   Variable: BMI
+##   Group 4
+##   
+##
+##################################################################################################
+##################################################################################################
+
+
+
+
+
+##############################
+##############################
+##
+##  Load Packages
+##
+##############################
+##############################
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+library(superheat)
+
+
+
+##############################
+##############################
+##
+##  Load Data
+##
+##############################
+##############################
+
+
+# Demographic Data
+demo.data = read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+
+## HE USES = ALL OF THE TIME BUT SHOULD BE A <- INSTEAD 
+
+
+# Proteomics Data
+proteomics.data = read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+
+
+# Make sure everyone has two samples
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+
+
+
+
+
+##############################
+##############################
+##
+##  Data Exploration
+##
+##############################
+##############################
+
+
+### Let's just take a look at our data before doing anything analyses, maybe should do some of this before manipulation
+
+# I like to use description functions like describe from Hmisc package, others exist
+
+describe(demo.data)
+
+
+### Can plot big data, that you can't just visually inspect manually
+
+# I want to plot boxplots of all genes per sample, same as what we did in pre-processing script
+# Need to reformat data to tidy format ;) 
+
+
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name"))
+proto.long$PrevPost = gsub("_.*", "", proto.long$name)
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=PrevPost)) + geom_boxplot(outlier.shape = NA)
+
+
+
+### We can use a heatmap to visualize all the data at once!
+
+# There are MANY heatmap packages, I like superheat because it's easy to customize 
+# Link to vignette: https://rlbarter.github.io/superheat/basic-usage.html
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90)
+
+
+
+##############################
+##############################
+##
+##  Dataset Manipulation
+##
+##############################
+##############################
+
+# Combine data
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%   # filter let's us filter by some condition, here Gene_Name that is NOT NA (aka not missing)
+  mutate(Gene_Name = gsub("-", "_", Gene_Name))  # mutate allows us to create a new variable or modify existing one, here I'm just changing - to _ in gene names
+
+# First transpose the data so subjects are on rows
+proto.tr.data = data.frame(t(proteomics.data)) # "t" transposes dataset (columns to rows, rows to columns)
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+
+# Create ID column
+proto.tr.data$SampleID = rownames(proto.tr.data)
+
+
+# Merge two datasets so everything is together
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+
+
+
+######### Long vs Wide format
+# Here we want to put our data into long format, once for Pre exposure and once for Post exposure
+# We then can merge those two datasets into one by Subject ID
+
+#PRE EXPOSURE DATA
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>%     # filter to only "Pre" exposure
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%        # select alows you to just use the specified columns
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Pre") # pivot longer turns the data into long form
+# cols says which columns to pivot longer -- i am telling it to use everything EXCEPT Subject_Number
+# names_to  says where to store info from column names for data specified by "cols"
+# values_to  says where to store the actual data
+
+### So basically to create this long dataset, I am saying:
+# 1. Take the combined dataset (both demographic and proteomics datasets) and filter for only those with "Pre" for PrevPost
+# 2. Next, select ONLY the columns corresponding to "Subject_Name" or any gene name
+# 3. Finally, create a new dataset where I want to just use the data in the gene columns, by Subject ID, and create a new column "Gene" to tell me which gene name that value corresponds to. 
+
+
+
+# POST EXPOSURE DATA
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Post")
+
+
+# Combine pre and post by subject number
+
+long.data = merge(long.data.pre, long.data.post, by = c("Gene", "Subject_Number"))
+
+#This is how you view your dataset- Good for double checking your work as you go 
+view(long.data)
+
+
+
+##############################
+##############################
+##
+##  Further Analyses
+##
+##############################
+##############################
+
+
+#### These are all samples of what you will be doing tomorrow, I have done this here for PRE exposure, and you will do it for POST exposure.
+# Please use pieces from this code, or code anywhere in the document, if necessary and modify to suit your analysis.
+# And of course, you are more than welcome to write your own code to do these analyses.
+
+
+### PRE
+
+# For all these questions we are looking at PRE exposure, so let's just create a long dataset with only pre exposure across the various columns
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Pre") %>%
+  arrange(Gene)
+long.data.pre$Value_Pre = as.numeric(long.data$Value_Pre)
+
+
+long.data.pre.loop = combined.data[which(combined.data$PrevPost=="Pre"),]
+
+# Just wanted to see what he did 
+view(long.data.pre.loop)
+
+
+### POST
+
+#  long dataset with only post exposure across the various columns
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Post") %>%
+  arrange(Gene)
+long.data.post$Value_Post = as.numeric(long.data$Value_Post)
+
+
+long.data.post.loop = combined.data[which(combined.data$PrevPost=="Post"),]
+
+# Just wanted to see what he did 
+view(long.data.post.loop)
+
+
+##############################################
+##############################################
+##
+##  4. BMI-associated differences
+##
+##############################################
+##############################################
+
+# Group 4: BMI-associated differences
+
+# At baseline (pre-exposure): What proteins differ by BMI?
+
+
+stat.test.BMI.pre = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(as_tibble(as.list(summary(lm(Value_Pre ~ BMI))$coefficients["BMI",]))) %>%
+  rename(pval=`Pr(>|t|)`) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+
+
+
+stat.signif.pre.pBH <- subset(stat.test.BMI.pre, pval.BH <0.05)
+stat.signif.pre.p <- subset(stat.test.BMI.pre, pval <0.05)
+
+view(stat.signif.pre.pBH)
+view(stat.signif.pre.p)
+# 14 OF THE PROTEINS HAS SIGNIFICANT P-VALUES, but when adjsusted for type 1 error/ false positives using BH adjustment method.  
+#None of the gene were statistically signifcant
+
+
+
+
+# At baseline (post-exposure): What proteins differ by BMI?
+stat.test.BMI.post = long.data.post %>%
+  group_by(Gene) %>%
+  summarise(as_tibble(as.list(summary(lm(Value_Post ~ BMI))$coefficients["BMI",]))) %>%
+  rename(pval=`Pr(>|t|)`) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+
+view(stat.test.BMI.post)
+
+#Making a subset, then looking at the all p values that were less than 0.05. Thanks- caroline 
+stat.signif.post.pBH <- subset(stat.test.BMI.post, pval.BH <0.05)
+stat.signif.post.p <- subset(stat.test.BMI.post, pval <0.05)
+
+view(stat.signif.post.pBH)
+view(stat.signif.post.p)
+
+
+# FINDING-302 OF THE PROTEINS HAS SIGNIFICANT P-VALUES, but when adjsusted for type 1 error/ false positives using BH adjustment method.  
+# None of the gene were statistically signifcant
+
+
+##########
+####
+#### DIFFERENCES BTW TWO GROUPS 
+####
+##########
+
+#OPTION 1- LOOKING at the difference between two groups- Thanks Tim. 
+# setdif will look at the first dataset, and delete rows that were the same w/ the second dataset.
+# since the number of rows was the same, then none got deleted.  There should have been fewer rows. 
+setdiff(stat.signif.post.p,stat.signif.pre.p)
+#FINDING-THEY ALL LOOKED THE SAME BETWEEN THE TWO- But this did not give the right answer 
+
+#OPTION 2- Left Join 
+
+Stat.combined. = merge(stat.signif.post.p, stat.signif.pre.p, by = "Gene",all.stat.signif.pre.p=TRUE)
+
+
+
+#Look up Genes
+
+
+
+#Linear Regression LOLOLOLOL- Did not get what I wanted yet 
+#Pre Data
+
+LinRegPre = lm(BMI~Gene, data = long.data.pre) #Create the linear regression
+summary(LinRegPre) #Review the results
+#Post Data 
+
+
+
+
+
+
+
+
+
