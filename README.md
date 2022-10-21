@@ -12,9 +12,10 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 
 
 
-Group Assignments:
+**Group Assignments:
 
-*Group 1: Neutrophil response-associated proteins*
+**Group 1: Neutrophil response-associated proteins*  
+
 *Statistics questions:*
 * Provided script: At baseline (pre-exposure): What proteins are differentially expressed in PMN responders vs. non-responders?
 ** Script that you need to generate: Post-exposure: What proteins are differentially expressed in PMN responders vs. non-responders?
@@ -24,15 +25,17 @@ Group Assignments:
 * Script that you need to generate: what proteins predict responder vs. non-responder status?
 
 
-Group 2: Sex-associated proteins
-						◊ At baseline (pre-exposure): What proteins differ by sex?
-						◊ Post-exposure: What proteins differ by sex?
-							} Compare these two findings: are they the same?
+**Group 2: Sex-associated proteins*
+*Statistics questions:*
+* Provided script: At baseline (pre-exposure): What proteins differ by sex?
+** Script that you need to generate: Post-exposure: What proteins differ by sex?
+** Compare these two findings: are they the same?
 							
-					® Group 3: Race-associated proteins
-						◊ At baseline (pre-exposure): What proteins differ by race?
-						◊ Post-exposure: What proteins differ by race?
-							} Compare these two findings: are they the same?
+**Group 3: Race/ethnicity-associated proteins*
+*Statistics questions:*
+* Provided script: At baseline (pre-exposure): What proteins differ by race?
+** Script that you need to generate: Post-exposure: What proteins differ by race?
+** Compare these two findings: are they the same?
 							
 					® Group 4: BMI-associated differences
 						◊ At baseline (pre-exposure): What proteins differ by BMI?
