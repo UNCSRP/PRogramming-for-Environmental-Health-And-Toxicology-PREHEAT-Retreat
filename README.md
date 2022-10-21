@@ -23,7 +23,7 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 * Compare these two findings: are they the same?
 
 *Machine learning questions:*
-* Script that you need to generate: what proteins predict responder vs. non-responder status?
+* Script that you need to generate: can we predict responder vs. non-responder status using protein signatures? what proteins predict responder vs. non-responder status?
 
 
 ## Group 2: Sex-associated proteins
@@ -35,7 +35,7 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 * Compare these two findings: are they the same?
 
 *Machine learning questions:*
-* Script that you need to generate: what proteins predict sex?
+* Script that you need to generate: can we predict sex using protein signatures? what proteins predict sex?
 							
 ## Group 3: Race/ethnicity-associated proteins
 
@@ -47,7 +47,7 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 
 
 *Machine learning questions:*
-* Script that you need to generate: what proteins predict ethnicity (binary variable)?
+* Script that you need to generate: can we predict ethnicity using protein signatures? what proteins predict ethnicity (binary variable)?
 	
 	
 ## Group 4: BMI-associated differences
@@ -60,7 +60,7 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 
 
 *Machine learning questions:*
-* Script that you need to generate: what proteins predict BMI?
+* Script that you need to generate: can we predict BMI using protein signatures? what proteins predict BMI?
 
 						
 ## Group 5: Asthma-associated proteins
@@ -73,7 +73,10 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 
 
 *Machine learning questions:*
-* Script that you need to generate: what proteins predict asthma?
+* Script that you need to generate: can we predict asthma using protein signatures? what proteins predict asthma?
 
 
-
+## Final Group Products
+* 1. Each individual uploads their script to github
+* 2. Each group drafts a powerpoint to present what they found, and what are the biological/clinical implications
+* 
