@@ -54,16 +54,26 @@ https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
 
 *Statistics questions:*
 
-** Provided script: At baseline (pre-exposure): What proteins differ by BMI?
-** Post-exposure: What proteins differ by BMI?
-** Compare these two findings: are they the same?
+* Provided script: At baseline (pre-exposure): What proteins differ by BMI?
+* Post-exposure: What proteins differ by BMI?
+* Compare these two findings: are they the same?
+
+
+*Machine learning questions:*
+* Script that you need to generate: what proteins predict BMI?
+
 						
 ## Group 5: Asthma-associated proteins
 
-** Provided script: At baseline (pre-exposure): What proteins differ by asthma status?
-** Post-exposure: What proteins differ by asthma status?
-** Compare these two findings: are they the same?
+*Statistics questions:*
 
+* Provided script: At baseline (pre-exposure): What proteins differ by asthma status?
+* Post-exposure: What proteins differ by asthma status?
+* Compare these two findings: are they the same?
+
+
+*Machine learning questions:*
+* Script that you need to generate: what proteins predict asthma?
 
 
 
