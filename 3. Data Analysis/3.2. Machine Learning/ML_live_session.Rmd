@@ -1,0 +1,177 @@
+---
+title: "ml"
+output: html_document
+date: "2022-10-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Libraries
+
+```{r}
+library(tidyverse)
+library(randomForest)
+library(janitor)
+library(xgboost)
+library(nnet)
+```
+## Loading
+```{r}
+
+demographic_data <- read.csv('./3. Data Analysis/Data/Demographic_Data.csv')
+
+proteomic_data <- read.csv('./3. Data Analysis/Data/Processed_Proteomics_Data.csv')
+
+```
+
+## Tidy up
+
+```{r}
+data_tidy <-
+  proteomic_data %>% 
+  pivot_longer(cols=c(2:ncol(proteomic_data)), names_to = "SampleID", values_to = 'Value') %>% 
+  pivot_wider(names_from = 'Gene_Name', values_from='Value')
+
+data_full <-
+  data_tidy %>% 
+  left_join(demographic_data, by='SampleID')
+
+data_predict <-
+  data_full %>% 
+  select(c(2:ncol(data_tidy), PrevPost)) %>% 
+  mutate(PrevPost = ifelse(PrevPost == 'Pre', 0, 1))
+
+data_predict_mn <-
+  data_full %>% 
+  select(c(2:ncol(data_tidy), Race))
+```
+
+```{r}
+mm <- multinom(Race~., data=data_predict_mn, MaxNWts =10000000)
+```
+
+
+#Logistic Regression
+```{r}
+logit_reg <- glm(PrevPost~., family=binomial, data=data_predict)
+summary(logit_reg)
+
+logit_pred <- predict(logit_reg, data_predict %>% select(-PrevPost), type='response')
+
+logit_pred
+
+logit_bin_pred <- as.integer(logit_pred > 0.5)
+
+lr_acc <- mean(logit_bin_pred == data_predict$PrevPost)
+
+lr_acc
+```
+```{r}
+shuffle_ix <- sample(nrow(data_predict), nrow(data_predict))
+data_predict2 <- data_predict[shuffle_ix,]
+
+splt_idx <- sample(c(T,F), replace = T, size=nrow(data_predict), prob=c(0.80, 0.20)) 
+
+data_train <- data_predict2[splt_idx,]
+data_test <- data_predict2[!splt_idx,]
+
+
+logit_reg <- glm(PrevPost~., family=binomial, data=data_train)
+summary(logit_reg)
+
+logit_pred <- predict(logit_reg, data_test %>% select(-PrevPost), type='response')
+
+logit_pred
+
+logit_bin_pred <- as.integer(logit_pred > 0.5)
+
+lr_acc <- mean(logit_bin_pred == data_test$PrevPost)
+
+tp <- sum(logit_bin_pred == 1 & data_test$PrevPost == 1)
+ap <- sum(data_test$PrevPost == 1)
+
+
+lr_acc
+
+specificity = tp/ap
+
+specificity
+
+tn <- sum(logit_bin_pred ==0 & data_test$PrevPost == 0)
+an <- sum(data_test$PrevPost == 0)
+
+sensitivity <- tn/an
+sensitivity
+```
+```{r}
+
+
+data_train <-
+  data_train %>% 
+  clean_names()
+
+data_test <-
+  data_test %>% 
+  clean_names()
+
+rf_model <- randomForest(formula = factor(prev_post)~., data=data_train)
+
+rf_pred <- predict(rf_model, data_test)
+
+rf_pred <- as.numeric(as.character(rf_pred))
+
+rf_accuracy <- mean(rf_pred == data_test$prev_post)
+
+rf_accuracy
+```
+```{r}
+pca <- prcomp(data_predict %>% select(-PrevPost))
+
+data_predict_cln <- 
+  data_predict %>% 
+  clean_names()
+
+pca <- prcomp(data_predict_cln %>% select(-prev_post))
+
+dim_red <-
+  pca$x %>% 
+  as_tibble() %>% 
+  select(c(1:15)) %>% 
+  mutate(prev_post = data_predict_cln$prev_post)
+
+shuffle_ix <- sample(nrow(dim_red), nrow(dim_red))
+dim_red <- dim_red[shuffle_ix,]
+
+splt_idx <- sample(c(T,F), replace = T, size=nrow(dim_red), prob=c(0.80, 0.20)) 
+
+data_train <- dim_red[splt_idx,]
+data_test <- dim_red[!splt_idx,]
+
+
+rf_model <- randomForest(formula = factor(prev_post)~., data=data_train)
+
+rf_pred <- predict(rf_model, data_test)
+
+rf_pred <- as.numeric(as.character(rf_pred))
+
+rf_accuracy <- mean(rf_pred == data_test$prev_post)
+
+rf_accuracy
+```
+```{r}
+boosted_tree <- xgboost(data=data_test %>% select(-prev_post) %>%  as.matrix(), label=data_test$prev_post, nrounds = 10)
+
+
+rf_pred <- predict(boosted_tree, data_test %>% select(-prev_post) %>% as.matrix())
+
+rf_pred <- as.numeric(as.character(rf_pred))
+
+rf_pred <- as.integer(rf_pred > 0.5)
+
+rf_accuracy <- mean(rf_pred == data_test$prev_post)
+
+rf_accuracy
+```
+
