@@ -1,0 +1,247 @@
+---
+title: "PREHEAT-Race/Ethnicity Group"
+output: html_document
+date: "2022-10-21"
+---
+
+```{r setup, include=FALSE}
+```
+```{r}
+```
+
+
+```{r}
+install.packages(c("Hmisc", "tidyverse", "ggplot2", "janitor", "reshape2" , "superheat" , "tidyr"))
+```
+```{r}
+library(Hmisc)
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(reshape2)
+library(superheat)
+library(tidyr)
+```
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+demo.data = read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+proteomics.data = read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+describe(demo.data)
+```
+```{r}
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name"))  
+proto.long$PrevPost = gsub("_.*", "", proto.long$name)
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=PrevPost)) + geom_boxplot(outlier.shape = NA)
+```
+```{r}
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90, bottom.label.text.size = 3)
+```
+```{r}
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%
+  mutate(Gene_Name = gsub("-", "_", Gene_Name))
+```
+
+
+
+```{r}
+proto.tr.data = data.frame(t(proteomics.data))
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+```
+
+
+```{r}
+proto.tr.data$SampleID = rownames(proto.tr.data)
+```
+
+
+```{r}
+proto.tr.data$SampleID = rownames(proto.tr.data)
+```
+
+```{r}
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+```
+
+```{r}
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>%
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Pre")
+```
+
+
+```{r}
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Post")
+```
+
+
+```{r}
+long.data = merge(long.data.pre, long.data.post, by = c("Gene", "Subject_Number"))
+
+```
+
+
+```{r}
+long.data$Value_Pre = as.numeric(long.data$Value_Pre)
+long.data$Value_Post = as.numeric(long.data$Value_Post)
+```
+
+
+
+```{r}
+stat.test = long.data %>%
+  group_by(Gene) %>% 
+  summarise(pval = t.test(Value_Pre, Value_Post, paired=T)$p.value,
+            estimate = t.test(Value_Pre, Value_Post, paired=T)$estimate,
+            statistic = t.test(Value_Pre, Value_Post, paired=T)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+  
+```
+
+
+```{r}
+results_matrix = matrix(NA, nrow=nrow(proteomics.data), ncol=7)
+colnames(results_matrix) = c("Estimate", "Statistic", "Pval", "Pval.BH", "Mean.Pre", "Mean.Post", "Log2FC")
+rownames(results_matrix) = proteomics.data$Gene_Name
+
+for(i in proteomics.data$Gene_Name) {
+
+  pre.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Pre") %>% arrange(Subject_Number) %>% dplyr::select(i)))
+  post.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Post") %>% arrange(Subject_Number) %>% dplyr::select(i)))
+  
+  t.test.results = t.test(pre.data, post.data, paired=T)
+  
+  results_matrix[i, "Estimate"] = t.test.results$estimate[1]
+  results_matrix[i, "Statistic"] = t.test.results$statistic
+  results_matrix[i, "Pval"] = t.test.results$p.value
+
+  results_matrix[i, "Mean.Pre"] = mean(pre.data)
+  results_matrix[i, "Mean.Post"] = mean(post.data)
+  results_matrix[i, "Log2FC"] = log2(mean(post.data)/mean(pre.data))
+  
+}
+
+results_matrix[,"Pval.BH"] = p.adjust(results_matrix[,"Pval"], method="BH")
+```
+```{r}
+results_matrix = data.frame(results_matrix)
+```
+
+
+```{r}
+results_matrix_order = results_matrix[order(results_matrix$Pval),]
+
+head(results_matrix)
+head(results_matrix_order)
+```
+
+
+```{r}
+rownames(results_matrix_order[1,]);
+```
+
+
+```{r}
+combined.data.tgm2 = combined.data[,c("Subject_Number", "PrevPost", "TGM2")];
+combined.data.tgm2$PrevPost = as.factor(combined.data.tgm2$PrevPost);
+combined.data.tgm2$TGM2 = as.numeric(combined.data.tgm2$TGM2);
+
+ggplot(data=combined.data.tgm2, aes(x=PrevPost, y=TGM2, col=PrevPost)) + geom_boxplot()
+```
+
+
+```{r}
+results_matrix$Gene = rownames(results_matrix)
+```
+
+
+```{r}
+results_matrix$diffexp = "Not Significant"
+results_matrix$diffexp[results_matrix$Log2FC > log2(1.5) & results_matrix$Pval < 0.05] = "Up Regulated, Significant"
+results_matrix$diffexp[results_matrix$Log2FC < -log2(1.5) & results_matrix$Pval < 0.05] = "Down Regulated, Significant"
+```
+
+
+```{r}
+ggplot(data=results_matrix, aes(x=Log2FC, y=-log10(Pval), col=diffexp)) + xlim(c(-2,2)) +
+  geom_point() + theme_minimal()  + scale_color_manual(values=c("dodgerblue", "grey", "firebrick1"), name="")
+```
+
+
+```{r}
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Pre") %>%
+  arrange(Gene)
+long.data.pre$Value_Pre = as.numeric(long.data$Value_Pre)
+
+
+long.data.pre.loop = combined.data[which(combined.data$PrevPost=="Pre"),]
+```
+
+
+```{r}
+ stat.test.race = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(mean_W = mean(Value_Pre[Race=="W"]),
+            mean_B = mean(Value_Pre[Race=="B"]),
+            mean_As = mean(Value_Pre[Race=="As"]),
+            pval = summary(aov(Value_Pre ~ Race))[[1]]["Race","Pr(>F)"]) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+```
+
+
+```{r}
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Post") %>%
+  arrange(Gene)
+long.data.post$Value_Post = as.numeric(long.data$Value_Post)
+
+
+long.data.post.loop = combined.data[which(combined.data$PrevPost=="Post"),]
+```
+
+
+```{r}
+  stat.test.race = long.data.post %>%
+  group_by(Gene) %>%
+  summarise(mean_W = mean(Value_Post[Race=="W"]),
+            mean_B = mean(Value_Post[Race=="B"]),
+            mean_As = mean(Value_Post[Race=="As"]),
+            pval = summary(aov(Value_Post ~ Race))[[1]]["Race","Pr(>F)"]) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+```
+
+
+
