@@ -1,0 +1,264 @@
+---
+title: "PreHeat"
+output: html_document
+date: "2022-10-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+```
+
+
+```{r}
+install.packages("ggplot2", )
+```
+```{r}
+install.packages(c("tidyverse", "tidyr", "reshape2", "Hmisc", "superheat", "janitor" ))
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+library(superheat)
+
+```
+```{r}
+#Demographic & Proteomics data
+demo.data = read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+proteomics.data = read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+
+```
+```{r}
+# Make sure everyone has two samples
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+table(demo.data$Ethnicity)
+
+#Describedata
+describe(demo.data)
+
+```
+
+```{r}
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name")) %>% 
+  mutate(name = gsub("_.*", "", proto.long$name))
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=name)) + geom_boxplot(outlier.shape = NA)
+```
+```{r}
+##creating a heatmap
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90, bottom.label.text.size = 3)
+```
+```{r}
+##Dataset manipulation 
+
+# Combine data
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%   # filter let's us filter by some condition, here Gene_Name that is NOT NA (aka not missing)
+  mutate(Gene_Name = gsub("-", "_", Gene_Name))  # mutate allows us to create a new variable or modify existing one, here I'm just changing - to _ in gene names
+
+```
+```{r}
+# First transpose the data so subjects are on rows
+proto.tr.data = data.frame(t(proteomics.data)) # "t" transposes dataset (columns to rows, rows to columns)
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+```
+
+```{r}
+# Create ID column
+proto.tr.data$SampleID = rownames(proto.tr.data)
+```
+
+```{r}
+# Merge two datasets so everything is together
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+
+#sortedcombined 
+```
+
+```{r}
+# We then can merge those two datasets into one by Subject ID
+
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>%     # filter to only "Pre" exposure
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%        # select alows you to just use the specified columns
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Pre") # pivot longer turns the data into long form
+                                                                                       # cols says which columns to pivot longer -- i am telling it to use everything EXCEPT Subject_Number
+                                                                                       # names_to  says where to store info from column names for data specified by "cols"
+                                                                            
+```
+
+```{r}
+# Do the same thing for post exposure data
+
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Post")
+
+#Ethnicity pre exposure data
+long.data.ethnicitypre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Ethnicity", "Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Ethnicity, Subject_Number), names_to = "Gene", values_to = "Value_Pre")
+
+
+#Ethnicity post exposure data
+long.data.ethnicity = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Ethnicity", "Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Ethnicity, Subject_Number), names_to = "Gene", values_to = "Value_Post")
+```
+
+```{r}
+# Combine pre and post by subject number
+
+long.data = merge(long.data.ethnicity,long.data.ethnicitypre, by = c("Gene", "Subject_Number"))
+
+```
+```{r}
+# Now we can set this through to the t test function
+
+# Make sure value are numberic
+
+long.data$Value_Pre = as.numeric(long.data$Value_Pre)
+long.data$Value_Post = as.numeric(long.data$Value_Post)
+
+```
+```{r}
+# Here I am running a BUNCH of t-tests, 1 per Gene 
+
+stat.test = long.data %>%
+  group_by(Gene) %>%     # group_by Gene, so run through each gene 1 by 1
+  summarise(pval = t.test(Value_Pre, Value_Post, paired=T)$p.value,  # extract p-value from t-test
+            estimate = t.test(Value_Pre, Value_Post, paired=T)$estimate,  # extract estimates (mean difference between groups) from t-test
+            statistic = t.test(Value_Pre, Value_Post, paired=T)$statistic) %>%  # extract test statistic from t-test
+  mutate(pval.BH = p.adjust(pval, method="BH"))   # multiple test corrections
+ 
+summary(stat.test)
+
+```
+```{r}
+# This is doing the same thing as above, but in a loop (which may be more intuitive to understand but, generally, much slower run time)
+
+results_matrix = matrix(NA, nrow=nrow(proteomics.data), ncol=7)
+colnames(results_matrix) = c("Estimate", "Statistic", "Pval", "Pval.BH", "Mean.Pre", "Mean.Post", "Log2FC")
+rownames(results_matrix) = proteomics.data$Gene_Name
+
+for(i in proteomics.data$Gene_Name) 
+
+  pre.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Pre") %>% arrange(Subject_Number) %>% dplyr::select(i)))
+  post.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Post") %>% arrange(Subject_Number) %>% dplyr::select(i)))
+  
+  t.test.results = t.test(pre.data, post.data, paired=T)
+  
+  results_matrix[i, "Estimate"] = t.test.results$estimate[1]
+  results_matrix[i, "Statistic"] = t.test.results$statistic
+  results_matrix[i, "Pval"] = t.test.results$p.value
+
+  results_matrix[i, "Mean.Pre"] = mean(pre.data)
+  results_matrix[i, "Mean.Post"] = mean(post.data)
+  results_matrix[i, "Log2FC"] = log2(mean(post.data)/mean(pre.data))
+```
+
+```{r}
+#P values that are less than 0.05
+
+table(stat.test$pval)
+```
+
+
+```{r}
+# We can easily sort these lists from small to largest p-value using order() 
+stat_test_order = stat.test[order(stat.test$pval),]
+
+head(stat.test)
+head(stat_test_order)
+
+
+```
+
+```{r}
+# Let's use the top gene from the paired t-test analysis
+# Get our ordered matrix, and select first gene (genes are rownames)
+
+rownames(stat_test_order[1,]);   # "TGM2"
+```
+
+```{r}
+#Now we can use that gene to plot the data for that specific gene
+
+combined.data.tgm2 = combined.data[,c("Subject_Number", "PrevPost", "TGM2")];
+combined.data.tgm2$PrevPost = as.factor(combined.data.tgm2$PrevPost);
+combined.data.tgm2$TGM2 = as.numeric(combined.data.tgm2$TGM2);
+
+ggplot(data=combined.data.tgm2, aes(x=PrevPost, y=TGM2, col=PrevPost)) + geom_boxplot();    ### If your data look weird, might be because values aren't numeric (or factor or whatever) when they should be
+
+
+```
+```{r}
+# Convert to dataframe
+results_matrix = data.frame(results_matrix)
+
+
+# We can easily sort these lists from small to largest p-value using order() 
+results_matrix_order = results_matrix[order(results_matrix$Pval),]
+
+head(results_matrix)
+head(results_matrix_order)
+```
+
+
+```{r}
+# A volcano plot shows how p values relate to fold change (fc)
+
+# Fold change is generally reported as log2(fc), where fold change describes the change between pre and post (in this study) values
+# Here we are calculating log2 fold change as: log2(mean(post.data)/mean(pre.data))
+# We take log2 because this allows us to say, log2fc=1 corresponds to the meaning the post value is double the pre value
+
+
+# Set rownames
+stat_test_order$Gene = rownames(stat_test_order)
+
+
+# Here we are creating categories for what values are significantly up or down regulated, based on p value and fc
+
+results_matrix$diffexp = "Not Significant"
+results_matrix$diffexp[results_matrix$Log2FC > log2(1.5) & results_matrix$Pval < 0.05] = "Up Regulated, Significant"
+results_matrix$diffexp[results_matrix$Log2FC < -log2(1.5) & results_matrix$Pval < 0.05] = "Down Regulated, Significant"
+
+
+
+#ggplot
+
+ggplot(data=results_matrix, aes(x=Log2FC, y=-log10(Pval), col=diffexp)) + xlim(c(-2,2)) +
+  geom_point() + theme_minimal()  + scale_color_manual(values=c("dodgerblue", "grey", "firebrick1"), name="")
+
+
+
+```
+
+
+
