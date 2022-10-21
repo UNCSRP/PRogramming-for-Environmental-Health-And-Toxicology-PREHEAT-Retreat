@@ -1,0 +1,426 @@
+---
+title: "Group1_Neutrophil_Analysis"
+output: html_document
+date: "2022-10-21"
+---
+
+PREHEAT Retreat
+Group 1: Neutrophils
+Group Members: Erin McNell and Caty Cobos-Uribe
+Description:
+1. Two Group Comparisons
+Used t-test to investigate what proteins are differentially expressed before and after woodsmoke exposure
+2. Further Analysis: Neutrophils
+Used t-test to investigate what proteins are differentially expressed between responders and non-responders at baseline and following woodsmoke exposure
+3. Machine Learning
+Attempted to develop a linear model to predict responder status given protein expression. The model had 50% accuracy.
+
+
+---- 1. Data Manuipulation and Two-Group Comparisons ----
+
+Question 1: What proteins are differentially expressed before and after woodsmoke exposure?
+
+----Install and Load Packages----
+
+```{r}
+install.packages('tidyverse')
+install.packages('ggplot2')
+install.packages('reshape2')
+install.packages('Hmisc')
+install.packages('superheat')
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+library(superheat)
+```
+
+---- Load Data ----
+
+```{r}
+demo.data = read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+proteomics.data = read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+```
+
+---- Make sure every subject has 2 samples ----
+
+```{r}
+table(demo.data$Subject_Number)
+table(demo.data$PrevPost)
+```
+
+---- Describe Data ----
+```{r}
+describe(demo.data)
+```
+
+---- Visual Plot ----
+```{r}
+proto.long = proteomics.data %>% pivot_longer(cols=-c("Gene_Name"))
+proto.long$PrevPost = gsub("_.*", "", proto.long$name)
+ggplot(data=proto.long, aes(x=name, y=log10(value), col=PrevPost)) + geom_boxplot(outlier.shape = NA)
+```
+
+---- View as heatmap ----
+```{r}
+superheat(log(proteomics.data[,2:ncol(proteomics.data)]), pretty.order.rows = T, 
+          bottom.label.text.angle = 90)
+```
+
+Manipulate Data
+
+First, combine data:
+```{r}
+proteomics.data = proteomics.data %>% filter(!is.na(Gene_Name)) %>%  
+  mutate(Gene_Name = gsub("-", "_", Gene_Name))
+```
+
+Next transpose the data so there is a row for each subject:
+```{r}
+proto.tr.data = data.frame(t(proteomics.data))
+colnames(proto.tr.data) = proto.tr.data[1,]
+proto.tr.data = proto.tr.data[-1,]
+```
+
+Create a column for subject ID:
+```{r}
+proto.tr.data$SampleID = rownames(proto.tr.data)
+```
+
+Then merge demographic data and proteomics data:
+```{r}
+combined.data = merge(demo.data, proto.tr.data, by = "SampleID")
+combined.data = data.frame(combined.data)
+view(combined.data)
+```
+
+Convert data frame to long format:
+```{r}
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Pre")
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name)) %>%
+  pivot_longer(cols = -c(Subject_Number), names_to = "Gene", values_to = "Value_Post")
+long.data = merge(long.data.pre, long.data.post, by = c("Gene", "Subject_Number"))
+```
+
+Finally, convert data to numeric form:
+```{r}
+long.data$Value_Pre = as.numeric(long.data$Value_Pre)
+long.data$Value_Post = as.numeric(long.data$Value_Post)
+```
+
+
+t-test - Compare pre- and post-exposure expression of each protein ----
+
+Run t-test:
+```{r}
+stat.test = long.data %>%
+  group_by(Gene) %>%     
+  summarise(pval = t.test(Value_Pre, Value_Post, paired=T)$p.value, 
+            estimate = t.test(Value_Pre, Value_Post, paired=T)$estimate,  
+            statistic = t.test(Value_Pre, Value_Post, paired=T)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+```
+
+There is also the option to do this as a loop:
+```{r}
+protein_results_matrix = matrix(NA, nrow=nrow(proteomics.data), ncol=7)
+colnames(protein_results_matrix) = c("Estimate", "Statistic", "Pval", "Pval.BH", "Mean.Pre", "Mean.Post", "Log2FC")
+rownames(protein_results_matrix) = proteomics.data$Gene_Name
+
+for(i in proteomics.data$Gene_Name) {
+
+  pre.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Pre") %>% arrange(Subject_Number) %>% dplyr::select(all_of(i))))
+  post.data = as.numeric(unlist(combined.data %>% filter(PrevPost == "Post") %>% arrange(Subject_Number) %>% dplyr::select(all_of(i))))
+  
+  t.test.results = t.test(pre.data, post.data, paired=T)
+  
+  protein_results_matrix[i, "Estimate"] = t.test.results$estimate[1]
+  protein_results_matrix[i, "Statistic"] = t.test.results$statistic
+  protein_results_matrix[i, "Pval"] = t.test.results$p.value
+
+  protein_results_matrix[i, "Mean.Pre"] = mean(pre.data)
+  protein_results_matrix[i, "Mean.Post"] = mean(post.data)
+  protein_results_matrix[i, "Log2FC"] = log2(mean(post.data)/mean(pre.data))
+  
+}
+
+protein_results_matrix[,"Pval.BH"] = p.adjust(protein_results_matrix[,"Pval"], method="BH")
+```
+
+Now we need to convert this matrix to a data frame:
+```{r}
+protein_results_matrix <- data.frame(protein_results_matrix)
+```
+
+And sort by p-value to pick out the genes with significantly different between pre- and post-exposure values:
+```{r}
+order_protein_results_matrix = protein_results_matrix[order(protein_results_matrix$Pval),]
+
+head(protein_results_matrix)
+head(order_protein_results_matrix)
+```
+To answer Question 1: What proteins are differentially expressed before and after woodsmoke exposure?
+
+```{r}
+significant_genes <- order_protein_results_matrix %>% filter(Pval < 0.05)
+```
+
+
+
+
+---- Generate a Boxplot ----
+Using gene with the lowest p-value: TGM2
+```{r}
+rownames(order_protein_results_matrix[1,])
+combined.data.tgm2 = combined.data[,c("Subject_Number", "PrevPost", "TGM2")];
+combined.data.tgm2$PrevPost = as.factor(combined.data.tgm2$PrevPost);
+combined.data.tgm2$TGM2 = as.numeric(combined.data.tgm2$TGM2);
+
+ggplot(data=combined.data.tgm2, aes(x=PrevPost, y=TGM2, col=PrevPost)) + geom_boxplot()
+```
+
+--- Volcano Plot ----
+```{r}
+protein_results_matrix$Gene = rownames(protein_results_matrix)
+protein_results_matrix$diffexp = "Not Significant"
+protein_results_matrix$diffexp[protein_results_matrix$Log2FC > log2(1.5) & protein_results_matrix$Pval < 0.05] = "Up Regulated, Significant"
+protein_results_matrix$diffexp[protein_results_matrix$Log2FC < -log2(1.5) & protein_results_matrix$Pval < 0.05] = "Down Regulated, Significant"
+ggplot(data=protein_results_matrix, aes(x=Log2FC, y=-log10(Pval), col=diffexp)) + xlim(c(-2,2)) +
+  geom_point() + theme_minimal()  + scale_color_manual(values=c("dodgerblue", "grey", "firebrick1"), name="")
+```
+
+---- 2. Further Analyses: Neutrophils ----
+
+Question 2: What proteins are differentially expressed in PMN responders vs. non-responders at baseline?
+
+First, create a long dataset with only pre-exposure data
+```{r}
+long.data.pre = combined.data %>% filter(PrevPost == "Pre") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Pre") %>%
+  arrange(Gene)
+long.data.pre$Value_Pre = as.numeric(long.data$Value_Pre)
+
+
+long.data.pre.loop = combined.data[which(combined.data$PrevPost=="Pre"),]
+```
+
+Now we can run t-tests:
+```{r}
+stat.test.RS = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(pval = t.test(Value_Pre ~ Responder_Status)$p.value,
+            as_tibble(as.list(t.test(Value_Pre ~ Responder_Status)$estimate)),
+            statistic = t.test(Value_Pre ~ Responder_Status)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+stat.test.RS = long.data.pre %>%
+  group_by(Gene) %>%
+  summarise(pval = t.test(Value_Pre ~ Responder_Status)$p.value,
+            NR_mean =  t.test(Value_Pre ~ Responder_Status)$estimate['mean in group NR'],
+            R_mean  = t.test(Value_Pre ~ Responder_Status)$estimate['mean in group R'],
+            statistic = t.test(Value_Pre ~ Responder_Status)$statistic) %>%
+  mutate(pval.BH = p.adjust(pval, method="BH"))
+```
+
+(Option to run as a loop)
+```{r}
+pre_neutrophil_results_matrix = matrix(NA, nrow=nrow(proteomics.data), ncol=6)
+colnames(pre_neutrophil_results_matrix) = c("Statistic", "Pval", "Pval.BH", "Mean.R", "Mean.NR", "Log2FC")
+rownames(pre_neutrophil_results_matrix) = proteomics.data$Gene_Name
+
+for(i in proteomics.data$Gene_Name) {
+  
+  resp.data = long.data.pre.loop[which(long.data.pre.loop$Responder_Status=="R"),i]
+  resp.data = as.numeric(resp.data)
+  
+  non.resp.data = long.data.pre.loop[which(long.data.pre.loop$Responder_Status=="NR"),i]
+  non.resp.data = as.numeric(non.resp.data)
+  
+  t.test.results = t.test(resp.data, non.resp.data)
+  
+  pre_neutrophil_results_matrix[i, "Statistic"] = t.test.results$statistic
+  pre_neutrophil_results_matrix[i, "Pval"] = t.test.results$p.value
+  
+  pre_neutrophil_results_matrix[i, "Mean.R"] = mean(resp.data)
+  pre_neutrophil_results_matrix[i, "Mean.NR"] = mean(non.resp.data)
+  pre_neutrophil_results_matrix[i, "Log2FC"] = log2(mean(non.resp.data)/mean(resp.data))
+  
+}
+
+pre_neutrophil_results_matrix[,"Pval.BH"] = p.adjust(pre_neutrophil_results_matrix[,"Pval"], method="BH")
+```
+
+And convert the resulting matrix to a data frame:
+```{r}
+pre_neutrophil_results_matrix = data.frame(pre_neutrophil_results_matrix)
+```
+
+Finally, sort by p-value:
+```{r}
+order_pre_neutrophil_results_matrix = pre_neutrophil_results_matrix[order(pre_neutrophil_results_matrix$Pval),]
+
+head(pre_neutrophil_results_matrix)
+head(order_pre_neutrophil_results_matrix)
+```
+
+To answer Question 2: What proteins are differentially expressed in PMN responders vs. non-responders at baseline?
+
+```{r}
+significant_genes_pre <- order_pre_neutrophil_results_matrix %>% filter(Pval < 0.05)
+```
+
+
+Question 3: What proteins are differentially expressed in PMN responders vs. non-responders following woodsmoke exposure?
+
+First, create a long dataset with only post-exposure data
+```{r}
+long.data.post = combined.data %>% filter(PrevPost == "Post") %>% 
+  dplyr::select(c("Subject_Number", proteomics.data$Gene_Name, "Responder_Status", "Sex", "Race", "Age", "BMI", "Asthma_Status")) %>%
+  pivot_longer(cols = -c(Subject_Number, Responder_Status, Sex, Race, Age, BMI, Asthma_Status), names_to = "Gene", values_to = "Value_Post") %>%
+  arrange(Gene)
+long.data.post$Value_Pre = as.numeric(long.data$Value_Post)
+
+
+long.data.post.loop = combined.data[which(combined.data$PrevPost=="Post"),]
+```
+
+Optional loop:
+```{r}
+post_neutrophil_results_matrix = matrix(NA, nrow=nrow(proteomics.data), ncol=6)
+colnames(post_neutrophil_results_matrix) = c("Statistic", "Pval", "Pval.BH", "Mean.R", "Mean.NR", "Log2FC")
+rownames(post_neutrophil_results_matrix) = proteomics.data$Gene_Name
+
+for(i in proteomics.data$Gene_Name) {
+  
+  resp.data = long.data.pre.loop[which(long.data.pre.loop$Responder_Status=="R"),i]
+  resp.data = as.numeric(resp.data)
+  
+  non.resp.data = long.data.pre.loop[which(long.data.pre.loop$Responder_Status=="NR"),i]
+  non.resp.data = as.numeric(non.resp.data)
+  
+  t.test.results = t.test(resp.data, non.resp.data)
+  
+  post_neutrophil_results_matrix[i, "Statistic"] = t.test.results$statistic
+  post_neutrophil_results_matrix[i, "Pval"] = t.test.results$p.value
+  
+  post_neutrophil_results_matrix[i, "Mean.R"] = mean(resp.data)
+  post_neutrophil_results_matrix[i, "Mean.NR"] = mean(non.resp.data)
+  post_neutrophil_results_matrix[i, "Log2FC"] = log2(mean(non.resp.data)/mean(resp.data))
+  
+}
+
+post_neutrophil_results_matrix[,"Pval.BH"] = p.adjust(post_neutrophil_results_matrix[,"Pval"], method="BH")
+```
+
+And convert the resulting matrix to a data frame:
+```{r}
+post_neutrophil_results_matrix = data.frame(post_neutrophil_results_matrix)
+```
+
+And order by p-value:
+```{r}
+order_post_neutrophil_results_matrix = post_neutrophil_results_matrix[order(post_neutrophil_results_matrix$Pval),]
+
+head(post_neutrophil_results_matrix)
+head(order_post_neutrophil_results_matrix)
+```
+
+To answer Question 3: What proteins are differentially expressed in PMN responders vs. non-responders following woodsmoke exposure?
+```{r}
+significant_genes_post <- order_post_neutrophil_results_matrix %>% filter(Pval < 0.05)
+```
+
+
+
+---- 3. Machine Learning ----
+
+Load necessary packages:
+```{r}
+install.packages("randomForest")
+install.packages("janitor")
+install.packages("xgboost")
+
+library(randomForest)
+library(janitor)
+library(xgboost)
+```
+
+Load Data:
+```{r}
+data_demo <- read.csv("/cloud/project/3. Data Analysis/Data/Demographic_Data.csv")
+data_proteomics <- read.csv("/cloud/project/3. Data Analysis/Data/Processed_Proteomics_Data.csv")
+
+```
+
+
+First, let's convert the data to tidy format:
+```{r}
+data_tidy <-
+  data_proteomics %>% 
+  pivot_longer(cols=c(2:ncol(data_proteomics)), names_to = "SampleID", values_to = 'Value') %>% 
+  pivot_wider(names_from = 'Gene_Name', values_from='Value')
+```
+
+In the demographics dataframe, let's keep only our SampleID and variable to predict on:
+```{r}
+data_demo <-
+  data_demo %>% 
+  select('SampleID','Responder_Status')
+```
+
+Join the two dataframes on SampleID, preserving all the rows in proteomics (Join Type:
+Then, drop the SampleID column afterwards:
+```{r}
+data_join <-
+  data_demo %>% 
+  inner_join(data_tidy, by='SampleID') %>% 
+  select(-'SampleID') %>% 
+  clean_names()
+```
+
+Make responder status a numerical binary variable by assigning a value of 0 to nonresponders and a value of 1 to responders:
+```{r}
+data_predict <-
+  data_join %>% 
+  mutate(responder_status = ifelse(responder_status == "NR",0,1))
+```
+
+Shuffle the data set and split into a test and prediction data:
+```{r}
+shuffle_idx = sample(nrow(data_predict), nrow(data_predict))
+data_predict_shuffled <- data_predict[shuffle_idx,]
+
+split_idx <- sample(c(T,F), replace = T, size=nrow(data_predict), prob=c(0.80, 0.20))
+
+data_train <- data_predict_shuffled[split_idx,]
+data_test <- data_predict_shuffled[!split_idx,]
+
+mdl <- lm(responder_status~., data=data_train)
+summary(mdl)
+```
+
+Predict using this model and plot accuracy:
+```{r}
+logit_pred <- predict(mdl, data_test %>% select(-responder_status), type='response')
+```
+Make dataframe:
+```{r}
+mdl_coeff <- as.data.frame(logit_pred)
+```
+
+Determine accuracy of model:
+```{r}
+logit_bin_pred <- as.integer(logit_pred > 0.5)
+
+lr_acc <- mean(logit_bin_pred == data_predict$responder_status)
+
+lr_acc
+```
+
+
+
+
