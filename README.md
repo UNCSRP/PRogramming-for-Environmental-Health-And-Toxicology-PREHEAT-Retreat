@@ -1,14 +1,6 @@
 # PRogramming-for-Environmental-Health-And-Toxicology-PREHEAT-Retreat
 
-This repository contains training materials for the PRogramming for Environmental Health and Toxicology (PREHEAT) retreat on October 20-21, 2022. In the instance that the files are unable to rendered the NBViewer link can be clicked below. 
-
-
-Please click on the below link to complete the pre-workshop survey:
-https://unc.az1.qualtrics.com/jfe/form/SV_0eN4EnD8rtlyyGy
- 
-Post-workshop survey link:
-https://unc.az1.qualtrics.com/jfe/form/SV_3KIMddyxJ14jP8O
-
+This repository contains training materials for the PRogramming for Environmental Health and Toxicology (PREHEAT) retreat on October 20-21, 2022.
 
 
 
